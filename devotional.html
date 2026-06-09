@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devocional Diario</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:     #faf9f7;
+  --card:   #ffffff;
+  --accent: #7c5c38;
+  --gold:   #c9a96e;
+  --text:   #2c2416;
+  --sub:    #7a6a55;
+  --border: #e8e0d4;
+  --ok:     #4a7c59;
+  --radius: 14px;
+  --shadow: 0 2px 12px rgba(0,0,0,.07);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ═══ LOGIN SCREEN ════════════════════════════════════════════════════ */
+
+#loginScreen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: linear-gradient(160deg, #faf6ef 0%, #f0e8d8 100%);
+}
+
+.auth-wrap { width: 100%; max-width: 380px; }
+
+.auth-brand { text-align: center; margin-bottom: 32px; }
+.auth-brand .logo-line {
+  font-size: 13px;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--sub);
+  font-weight: 500;
+}
+.auth-brand h1 {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-top: 6px;
+}
+
+.auth-card {
+  background: var(--card);
+  border-radius: 20px;
+  padding: 32px 28px;
+  box-shadow: 0 4px 32px rgba(0,0,0,.1);
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 24px;
+}
+.auth-tab {
+  flex: 1;
+  padding: 9px;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--sub);
+  cursor: pointer;
+  transition: all .15s;
+}
+.auth-tab.active {
+  background: var(--card);
+  color: var(--accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,.1);
+}
+
+.auth-field { margin-bottom: 14px; }
+.auth-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--sub);
+  margin-bottom: 6px;
+}
+.auth-field input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 15px;
+  background: var(--bg);
+  color: var(--text);
+  transition: border-color .15s;
+  outline: none;
+}
+.auth-field input:focus { border-color: var(--gold); background: #fff; }
+
+.auth-submit {
+  width: 100%;
+  margin-top: 8px;
+  padding: 13px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s, transform .1s;
+}
+.auth-submit:hover  { opacity: .9; }
+.auth-submit:active { transform: scale(.98); }
+.auth-submit:disabled { opacity: .5; cursor: not-allowed; }
+
+.auth-error {
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: #fdf0f0;
+  border: 1px solid #f5c6c6;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #c0392b;
+  display: none;
+}
+
+/* ═══ APP ═════════════════════════════════════════════════════════════ */
+
+#appScreen { display: none; }
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(250,249,247,.95);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hd-brand {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--sub);
+  flex-shrink: 0;
+}
+.hd-date { font-size: 13px; color: var(--sub); flex-shrink: 0; }
+.hd-status {
+  font-size: 12px;
+  color: var(--sub);
+  flex: 1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hd-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.hd-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sub);
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.hd-btn:hover { border-color: var(--gold); color: var(--accent); }
+.user-chip {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: #f5ede0;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+main {
+  max-width: 740px;
+  margin: 0 auto;
+  padding: 20px 16px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ═══ CARDS ════════════════════════════════════════════════════════════ */
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.card-head {
+  padding: 16px 18px 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.card-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--sub);
+}
+.card-ref { font-size: 16px; font-weight: 700; color: var(--accent); }
+
+.tabs { display: flex; padding: 0 18px; gap: 4px; }
+.tab {
+  border: none;
+  background: none;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sub);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all .15s;
+}
+.tab.active { color: var(--accent); border-color: var(--gold); }
+
+.verses { padding: 14px 18px 18px; line-height: 1.8; font-size: 15px; }
+.vnum {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--gold);
+  vertical-align: super;
+  margin-right: 2px;
+}
+.verses.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 0;
+}
+.compare-col { padding: 14px 18px 18px; }
+.compare-col:first-child { border-right: 1px solid var(--border); }
+.compare-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 10px;
+  display: block;
+}
+
+.card-foot {
+  border-top: 1px solid var(--border);
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.btn-cmp {
+  border: 1px solid var(--border);
+  background: transparent;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sub);
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-cmp:hover, .btn-cmp.active { border-color: var(--gold); color: var(--accent); }
+.ll-link { margin-left: auto; font-size: 12px; color: var(--sub); text-decoration: none; }
+.ll-link:hover { color: var(--accent); }
+
+.read-card { padding: 18px; display: flex; align-items: center; gap: 14px; }
+.check-box {
+  width: 28px; height: 28px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s;
+  font-size: 16px;
+  background: var(--bg);
+  flex-shrink: 0;
+}
+.check-box.checked { background: var(--ok); border-color: var(--ok); color: #fff; }
+.read-label { font-size: 15px; font-weight: 600; color: var(--text); }
+.read-sub { font-size: 12px; color: var(--sub); margin-top: 2px; }
+
+.streak-head { padding: 16px 18px 10px; display: flex; align-items: center; gap: 10px; }
+.streak-num { font-size: 32px; font-weight: 800; color: var(--accent); line-height: 1; }
+.streak-days { font-size: 13px; font-weight: 600; color: var(--sub); }
+.streak-mo { font-size: 12px; color: var(--sub); margin-top: 2px; }
+.cal { padding: 10px 18px 18px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-day {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  background: var(--bg);
+  color: var(--sub);
+}
+.cal-day.read { background: var(--ok); color: #fff; }
+.cal-day.today { outline: 2px solid var(--gold); outline-offset: -2px; }
+.cal-day.empty { background: transparent; }
+.cal-hdr { color: var(--sub); font-size: 10px; font-weight: 700; text-align: center; padding-bottom: 4px; }
+
+/* Collapsible panels */
+.panel-toggle {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  text-align: left;
+  border-bottom: 1px solid transparent;
+  transition: border-color .15s;
+}
+.panel-toggle[aria-expanded="true"] { border-bottom-color: var(--border); }
+.panel-label { font-size: 13px; font-weight: 700; color: var(--accent); flex: 1; }
+.panel-badge {
+  font-size: 11px;
+  background: var(--gold);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 700;
+}
+.panel-chevron { font-size: 12px; color: var(--sub); transition: transform .2s; }
+.panel-toggle[aria-expanded="true"] .panel-chevron { transform: rotate(180deg); }
+.panel-body { display: none; }
+.panel-body.open { display: block; }
+
+/* History */
+.hist-list { max-height: 280px; overflow-y: auto; }
+.hist-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background .1s;
+}
+.hist-item:last-child { border-bottom: none; }
+.hist-item:hover { background: var(--bg); }
+.hist-date { font-size: 12px; font-weight: 600; color: var(--sub); width: 86px; flex-shrink: 0; }
+.hist-ref  { font-size: 13px; font-weight: 600; color: var(--accent); flex: 1; }
+.hist-check { font-size: 14px; flex-shrink: 0; }
+
+/* Leaderboard */
+.lb-list { padding: 8px 0; }
+.lb-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.lb-item:last-child { border-bottom: none; }
+.lb-rank {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: var(--bg);
+  font-size: 12px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--sub);
+  flex-shrink: 0;
+}
+.lb-rank.r1 { background: #ffd700; color: #7a5a00; }
+.lb-rank.r2 { background: #c0c0c0; color: #4a4a4a; }
+.lb-rank.r3 { background: #cd7f32; color: #5a2e00; }
+.lb-name { flex: 1; font-size: 14px; font-weight: 600; color: var(--text); }
+.lb-name.me { color: var(--accent); }
+.lb-streak { font-size: 22px; font-weight: 800; color: var(--accent); line-height: 1; }
+.lb-streak-lbl { font-size: 10px; color: var(--sub); text-align: center; }
+.lb-mo { font-size: 11px; color: var(--sub); text-align: right; }
+
+.loading { padding: 32px; text-align: center; color: var(--sub); font-size: 14px; }
+.err-msg { padding: 16px 18px; color: #c0392b; font-size: 14px; }
+
+/* Settings modal */
+.modal-bg {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.4);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.modal-bg.open { display: flex; }
+.modal {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 24px;
+  width: 100%;
+  max-width: 320px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.2);
+}
+.modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+.setting-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.setting-row label { font-size: 14px; font-weight: 600; flex: 1; }
+.setting-row select {
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+}
+.modal-close {
+  margin-top: 16px; width: 100%; padding: 11px;
+  border: none; background: var(--accent); color: #fff;
+  border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ LOGIN ════════════════════════════════════════════════════════════ -->
+<div id="loginScreen" style="display:flex">
+  <div class="auth-wrap">
+    <div class="auth-brand">
+      <div class="logo-line">Living Life · M'Cheyne</div>
+      <h1>Devocional Diario</h1>
+    </div>
+    <div class="auth-card">
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tabLogin" onclick="showAuthTab('login')">Entrar</button>
+        <button class="auth-tab" id="tabReg" onclick="showAuthTab('register')">Crear cuenta</button>
+      </div>
+
+      <div id="loginForm">
+        <div class="auth-field">
+          <label>Usuario</label>
+          <input type="text" id="loginUser" placeholder="tu nombre" autocomplete="username"
+                 onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <div class="auth-field">
+          <label>Contraseña</label>
+          <input type="password" id="loginPass" placeholder="••••••" autocomplete="current-password"
+                 onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button class="auth-submit" id="loginBtn" onclick="doLogin()">Entrar</button>
+      </div>
+
+      <div id="registerForm" style="display:none">
+        <div class="auth-field">
+          <label>Nombre de usuario</label>
+          <input type="text" id="regUser" placeholder="elige un nombre" autocomplete="username"
+                 onkeydown="if(event.key==='Enter')doRegister()">
+        </div>
+        <div class="auth-field">
+          <label>Contraseña</label>
+          <input type="password" id="regPass" placeholder="mínimo 4 caracteres" autocomplete="new-password"
+                 onkeydown="if(event.key==='Enter')doRegister()">
+        </div>
+        <button class="auth-submit" id="regBtn" onclick="doRegister()">Crear cuenta</button>
+      </div>
+
+      <div class="auth-error" id="authErr"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ APP ══════════════════════════════════════════════════════════════ -->
+<div id="appScreen">
+  <header>
+    <span class="hd-brand">Living Life</span>
+    <span class="hd-date" id="hdDate"></span>
+    <span class="hd-status" id="hdStatus">Cargando…</span>
+    <div class="hd-actions">
+      <span class="user-chip" id="userChip"></span>
+      <button class="hd-btn" onclick="toggleLeaderboard()">Grupo</button>
+      <button class="hd-btn" onclick="toggleHistory()">Historial</button>
+      <button class="hd-btn" onclick="openSettings()">⚙</button>
+      <button class="hd-btn" onclick="doLogout()">Salir</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Leaderboard panel -->
+    <div class="card" id="lbCard" style="display:none">
+      <button class="panel-toggle" id="lbToggle" aria-expanded="false" onclick="toggleLeaderboard()">
+        <span class="panel-label">Rachas del grupo</span>
+        <span class="panel-badge" id="lbBadge">—</span>
+        <span class="panel-chevron">▼</span>
+      </button>
+      <div class="panel-body open" id="lbBody">
+        <div class="lb-list" id="lbList"><div class="loading">Cargando…</div></div>
+      </div>
+    </div>
+
+    <!-- History panel -->
+    <div class="card" id="histCard" style="display:none">
+      <button class="panel-toggle" id="histToggle" aria-expanded="false" onclick="toggleHistory()">
+        <span class="panel-label">Historial</span>
+        <span class="panel-badge" id="histBadge">0</span>
+        <span class="panel-chevron">▼</span>
+      </button>
+      <div class="panel-body open" id="histBody">
+        <div class="hist-list" id="histList"></div>
+      </div>
+    </div>
+
+    <!-- Bible card -->
+    <div class="card" id="bibleCard">
+      <div class="card-head">
+        <span class="card-title">Pasaje del día</span>
+        <span class="card-ref" id="refLabel">—</span>
+      </div>
+      <div class="tabs" id="tabsRow"></div>
+      <div class="verses" id="versesEl"><div class="loading">Buscando el pasaje…</div></div>
+      <div class="card-foot">
+        <button class="btn-cmp" id="cmpBtn" onclick="toggleCompare()">⇄ Comparar</button>
+        <a class="ll-link" id="llLink" href="#" target="_blank">Living Life ↗</a>
+      </div>
+    </div>
+
+    <!-- Read card -->
+    <div class="card">
+      <div class="read-card">
+        <div class="check-box" id="checkBox" onclick="toggleRead()"></div>
+        <div>
+          <div class="read-label" id="readLabel">Marcar como leído</div>
+          <div class="read-sub" id="readSub"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Streak card -->
+    <div class="card">
+      <div class="streak-head">
+        <div class="streak-num" id="streakNum">0</div>
+        <div>
+          <div class="streak-days">días seguidos</div>
+          <div class="streak-mo" id="streakMo"></div>
+        </div>
+      </div>
+      <div class="cal">
+        <div class="cal-grid" id="calGrid"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-bg" id="settingsModal" onclick="if(event.target===this)closeSettings()">
+  <div class="modal">
+    <h3>Ajustes</h3>
+    <div class="setting-row">
+      <label>Segunda versión</label>
+      <select id="versionSel" onchange="saveSettings()">
+        <option value="nbla">NBLA</option>
+        <option value="nvi">NVI</option>
+        <option value="rva">RVA-2015</option>
+        <option value="dhh">DHH</option>
+        <option value="nblh">NBLH</option>
+      </select>
+    </div>
+    <button class="modal-close" onclick="closeSettings()">Cerrar</button>
+  </div>
+</div>
+
+<script>
+const API_BASE = location.protocol === 'file:' ? 'http://localhost:7291' : '';
+
+const LS    = k => { try { return localStorage.getItem(k) } catch { return null } };
+const LSSET = (k,v) => { try { v==null ? localStorage.removeItem(k) : localStorage.setItem(k,v) } catch {} };
+
+const state = {
+  enRef: null, title: null, tab: 'rv60', compare: false,
+  reads: {}, history: [],
+  todayStr: new Date().toISOString().slice(0,10),
+  lbOpen: false, histOpen: false,
+};
+
+// ── API ────────────────────────────────────────────────────────────────────
+
+async function apiFetch(path, opts = {}) {
+  const token = LS('authToken');
+  const headers = { ...(opts.headers || {}) };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  let r;
+  try {
+    r = await fetch(`${API_BASE}${path}`, { signal: ctrl.signal, ...opts, headers });
+  } finally { clearTimeout(timer); }
+  const data = await r.json();
+  if (r.status === 401) { showLoginScreen(); throw new Error('Sesión expirada'); }
+  if (!r.ok) throw new Error(data.error || `Error ${r.status}`);
+  return data;
+}
+
+// ── Auth ───────────────────────────────────────────────────────────────────
+
+function showAuthTab(tab) {
+  document.getElementById('loginForm').style.display    = tab === 'login'    ? '' : 'none';
+  document.getElementById('registerForm').style.display = tab === 'register' ? '' : 'none';
+  document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
+  document.getElementById('tabReg').classList.toggle('active',   tab === 'register');
+  document.getElementById('authErr').style.display = 'none';
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById('authErr');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function setAuthLoading(btnId, loading) {
+  const btn = document.getElementById(btnId);
+  btn.disabled = loading;
+  btn.textContent = loading ? 'Cargando…' : (btnId === 'loginBtn' ? 'Entrar' : 'Crear cuenta');
+}
+
+async function doLogin() {
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+  if (!u || !p) { showAuthError('Ingresa usuario y contraseña'); return; }
+  setAuthLoading('loginBtn', true);
+  try {
+    const d = await apiFetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: p }),
+    });
+    LSSET('authToken',    d.token);
+    LSSET('authUsername', d.username);
+    await startApp(d.username);
+  } catch(e) { showAuthError(e.message); }
+  finally { setAuthLoading('loginBtn', false); }
+}
+
+async function doRegister() {
+  const u = document.getElementById('regUser').value.trim();
+  const p = document.getElementById('regPass').value;
+  if (!u || !p) { showAuthError('Completa todos los campos'); return; }
+  setAuthLoading('regBtn', true);
+  try {
+    const d = await apiFetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: p }),
+    });
+    LSSET('authToken',    d.token);
+    LSSET('authUsername', d.username);
+    await startApp(d.username);
+  } catch(e) { showAuthError(e.message); }
+  finally { setAuthLoading('regBtn', false); }
+}
+
+async function doLogout() {
+  try { await apiFetch('/api/logout', { method: 'POST' }); } catch {}
+  LSSET('authToken', null);
+  LSSET('authUsername', null);
+  showLoginScreen();
+}
+
+function showLoginScreen() {
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appScreen').style.display   = 'none';
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+  document.getElementById('authErr').style.display = 'none';
+}
+
+// ── App init ───────────────────────────────────────────────────────────────
+
+async function startApp(username) {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display   = 'block';
+
+  document.getElementById('userChip').textContent = username;
+  document.getElementById('hdDate').textContent =
+    new Date().toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'long' });
+  document.getElementById('llLink').href =
+    `https://www.duranno.com/livinglife/qt/?OD=${state.todayStr}`;
+  document.getElementById('versionSel').value = LS('version2') || 'nbla';
+
+  setStatus('Cargando datos…');
+  await Promise.all([loadHistory(), loadReads()]);
+  renderHistPanel();
+  renderCalendar();
+  await loadPassage(state.todayStr, true);
+}
+
+async function init() {
+  const token    = LS('authToken');
+  const username = LS('authUsername');
+  if (!token || !username) { showLoginScreen(); return; }
+  try {
+    const me = await apiFetch('/api/me');
+    await startApp(me.username);
+  } catch {
+    LSSET('authToken', null);
+    LSSET('authUsername', null);
+    showLoginScreen();
+  }
+}
+
+// ── Data ───────────────────────────────────────────────────────────────────
+
+async function loadHistory() {
+  try { state.history = await apiFetch('/api/history'); } catch { state.history = []; }
+}
+
+async function loadReads() {
+  const month = state.todayStr.slice(0,7);
+  try { state.reads = await apiFetch(`/api/reads?month=${month}`); } catch { state.reads = {}; }
+}
+
+async function loadPassage(dateStr, isToday) {
+  setStatus('Buscando pasaje…');
+  try {
+    const d = await apiFetch(`/api/passage?date=${dateStr}`);
+    if (!d.reference) { setStatus('Pasaje no disponible'); return; }
+    state.enRef   = d.reference;
+    state.title   = d.title;
+    state.isToday = isToday;
+    if (isToday) {
+      await apiFetch('/api/save-passage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: dateStr, ref: d.reference, title: d.title || '' }),
+      });
+    }
+    document.getElementById('refLabel').textContent = d.reference;
+    setStatus(d.cached ? 'Pasaje cargado' : 'Pasaje del día actualizado');
+    renderTabs();
+    loadBible(state.tab);
+    renderCheckState();
+  } catch(e) { setStatus('Error: ' + e.message); }
+}
+
+async function loadBible(version) {
+  if (!state.enRef) return;
+  const el = document.getElementById('versesEl');
+  if (!state.compare) {
+    el.className = 'verses';
+    el.innerHTML = '<div class="loading">Cargando versículos…</div>';
+    try {
+      const d = await apiFetch(`/api/bible?ref=${encodeURIComponent(state.enRef)}&version=${version}`);
+      el.innerHTML = renderVerses(d.verses);
+    } catch(e) {
+      el.innerHTML = `<div class="err-msg">Error: ${e.message}</div>`;
+    }
+  } else {
+    el.className = 'verses compare-grid';
+    el.innerHTML = `
+      <div class="compare-col" id="col1"><div class="loading">Cargando…</div></div>
+      <div class="compare-col" id="col2"><div class="loading">Cargando…</div></div>`;
+    const v2 = LS('version2') || 'nbla';
+    Promise.all([
+      apiFetch(`/api/bible?ref=${encodeURIComponent(state.enRef)}&version=rv60`),
+      apiFetch(`/api/bible?ref=${encodeURIComponent(state.enRef)}&version=${v2}`),
+    ]).then(([d1, d2]) => {
+      document.getElementById('col1').innerHTML =
+        `<span class="compare-label">RV60</span>${renderVerses(d1.verses)}`;
+      document.getElementById('col2').innerHTML =
+        `<span class="compare-label">${d2.version}</span>${renderVerses(d2.verses)}`;
+    }).catch(e => {
+      el.innerHTML = `<div class="err-msg">Error: ${e.message}</div>`;
+    });
+  }
+}
+
+function renderVerses(verses) {
+  if (!verses || !verses.length) return '<div class="err-msg">Sin versículos.</div>';
+  return verses.map(v => `<sup class="vnum">${v.verse}</sup>${v.text} `).join('');
+}
+
+// ── UI ─────────────────────────────────────────────────────────────────────
+
+function renderTabs() {
+  const v2 = LS('version2') || 'nbla';
+  const tabs = [{ id:'rv60', label:'RV60' }, { id:v2, label:v2.toUpperCase() }];
+  if (!tabs.find(t => t.id === state.tab)) state.tab = 'rv60';
+  document.getElementById('tabsRow').innerHTML = tabs.map(t =>
+    `<button class="tab ${state.tab===t.id?'active':''}" onclick="switchTab('${t.id}')">${t.label}</button>`
+  ).join('');
+}
+
+function switchTab(version) {
+  state.tab = version;
+  state.compare = false;
+  document.getElementById('cmpBtn').classList.remove('active');
+  renderTabs();
+  loadBible(version);
+}
+
+function toggleCompare() {
+  state.compare = !state.compare;
+  document.getElementById('cmpBtn').classList.toggle('active', state.compare);
+  loadBible(state.tab);
+}
+
+function renderCheckState() {
+  const isRead = !!state.reads[state.todayStr];
+  const box = document.getElementById('checkBox');
+  box.classList.toggle('checked', isRead);
+  box.textContent = isRead ? '✓' : '';
+  document.getElementById('readLabel').textContent = isRead ? '¡Leído hoy!' : 'Marcar como leído';
+  document.getElementById('readSub').textContent   = isRead
+    ? 'Bien hecho — la Palabra sembrada da fruto.'
+    : 'Marca cuando termines la lectura del día.';
+}
+
+async function toggleRead() {
+  const newVal = !state.reads[state.todayStr];
+  state.reads[state.todayStr] = newVal ? 1 : 0;
+  renderCheckState();
+  renderCalendar();
+  try {
+    await apiFetch('/api/read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: state.todayStr, is_read: newVal }),
+    });
+  } catch {
+    state.reads[state.todayStr] = newVal ? 0 : 1;
+    renderCheckState(); renderCalendar();
+  }
+}
+
+function renderCalendar() {
+  const today = new Date();
+  const year  = today.getFullYear();
+  const month = today.getMonth();
+  const first = new Date(year, month, 1).getDay();
+  const days  = new Date(year, month+1, 0).getDate();
+
+  let html = ['D','L','M','M','J','V','S'].map(d =>
+    `<div class="cal-hdr">${d}</div>`).join('');
+  for (let i = 0; i < first; i++) html += '<div class="cal-day empty"></div>';
+  for (let d = 1; d <= days; d++) {
+    const key = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday = d === today.getDate();
+    const isRead  = state.reads[key];
+    html += `<div class="cal-day${isRead?' read':''}${isToday?' today':''}">${d}</div>`;
+  }
+  document.getElementById('calGrid').innerHTML = html;
+
+  let streak = 0, d = new Date(today);
+  while (streak < 365) {
+    const key = d.toISOString().slice(0,10);
+    if (!state.reads[key]) break;
+    streak++;
+    d.setDate(d.getDate()-1);
+  }
+  document.getElementById('streakNum').textContent = streak;
+  document.getElementById('streakMo').textContent  =
+    `${Object.values(state.reads).filter(v=>v).length} días leídos este mes`;
+}
+
+// ── History ────────────────────────────────────────────────────────────────
+
+function toggleHistory() {
+  state.histOpen = !state.histOpen;
+  const card    = document.getElementById('histCard');
+  const toggle  = document.getElementById('histToggle');
+  const body    = document.getElementById('histBody');
+  card.style.display = state.histOpen ? '' : 'none';
+  toggle.setAttribute('aria-expanded', String(state.histOpen));
+  body.classList.toggle('open', state.histOpen);
+  if (state.histOpen) renderHistPanel();
+}
+
+function renderHistPanel() {
+  const list = document.getElementById('histList');
+  if (!state.history.length) {
+    list.innerHTML = '<div class="loading">Sin historial aún.</div>'; return;
+  }
+  list.innerHTML = state.history.map(h => {
+    const d = new Date(h.date + 'T12:00:00');
+    const label = d.toLocaleDateString('es-ES', { weekday:'short', day:'numeric', month:'short' });
+    return `<div class="hist-item" onclick="loadHistDay('${h.date}','${h.ref}')">
+      <span class="hist-date">${label}</span>
+      <span class="hist-ref">${h.ref}</span>
+      <span class="hist-check">${h.is_read ? '✓' : ''}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('histBadge').textContent = state.history.length;
+}
+
+function loadHistDay(dateStr, ref) {
+  state.enRef   = ref;
+  state.isToday = dateStr === state.todayStr;
+  document.getElementById('refLabel').textContent = ref;
+  document.getElementById('llLink').href = `https://www.duranno.com/livinglife/qt/?OD=${dateStr}`;
+  renderTabs();
+  loadBible(state.tab);
+}
+
+// ── Leaderboard ────────────────────────────────────────────────────────────
+
+async function toggleLeaderboard() {
+  state.lbOpen = !state.lbOpen;
+  const card   = document.getElementById('lbCard');
+  const toggle = document.getElementById('lbToggle');
+  const body   = document.getElementById('lbBody');
+  card.style.display = state.lbOpen ? '' : 'none';
+  toggle.setAttribute('aria-expanded', String(state.lbOpen));
+  body.classList.toggle('open', state.lbOpen);
+  if (state.lbOpen) await refreshLeaderboard();
+}
+
+async function refreshLeaderboard() {
+  document.getElementById('lbList').innerHTML = '<div class="loading">Cargando rachas…</div>';
+  try {
+    const data = await apiFetch('/api/leaderboard');
+    const me   = (LS('authUsername') || '').toLowerCase();
+    document.getElementById('lbBadge').textContent = data.length;
+    document.getElementById('lbList').innerHTML = data.length === 0
+      ? '<div class="loading">Sin usuarios aún.</div>'
+      : data.map((u, i) => {
+          const rankClass = i < 3 ? `r${i+1}` : '';
+          const isMe = u.username.toLowerCase() === me;
+          return `<div class="lb-item">
+            <div class="lb-rank ${rankClass}">${i+1}</div>
+            <div class="lb-name ${isMe?'me':''}">${u.username}${isMe?' (tú)':''}</div>
+            <div style="text-align:center">
+              <div class="lb-streak">${u.streak}</div>
+              <div class="lb-streak-lbl">días</div>
+            </div>
+            <div class="lb-mo">${u.month_reads} este mes</div>
+          </div>`;
+        }).join('');
+  } catch(e) {
+    document.getElementById('lbList').innerHTML = `<div class="err-msg">${e.message}</div>`;
+  }
+}
+
+// ── Settings ───────────────────────────────────────────────────────────────
+
+function openSettings()  { document.getElementById('settingsModal').classList.add('open'); }
+function closeSettings() { document.getElementById('settingsModal').classList.remove('open'); }
+function saveSettings() {
+  LSSET('version2', document.getElementById('versionSel').value);
+  renderTabs();
+  if (state.compare) loadBible(state.tab);
+}
+
+function setStatus(msg) { document.getElementById('hdStatus').textContent = msg; }
+
+init();
+</script>
+</body>
+</html>
