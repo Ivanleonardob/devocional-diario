@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Devocional Diario</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#7c5c38">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Devocional">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -971,6 +977,10 @@ function saveSettings() {
 function setStatus(msg) { document.getElementById('hdStatus').textContent = msg; }
 
 init();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js');
+}
 </script>
 </body>
 </html>

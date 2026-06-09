@@ -237,6 +237,14 @@ class Handler(BaseHTTPRequestHandler):
 
         if p.path in ('/', '/devotional.html'):
             self._file('devotional.html', 'text/html; charset=utf-8')
+        elif p.path == '/manifest.json':
+            self._file('manifest.json', 'application/manifest+json')
+        elif p.path == '/sw.js':
+            self._file('sw.js', 'application/javascript')
+        elif p.path == '/icon-192.png':
+            self._file('icon-192.png', 'image/png')
+        elif p.path == '/icon-512.png':
+            self._file('icon-512.png', 'image/png')
         elif p.path == '/api/me':
             user = self._auth()
             if user: self._json({'id': user['id'], 'username': user['username']})
