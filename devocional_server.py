@@ -7,68 +7,135 @@ import urllib.request, urllib.parse
 import json, re, os, threading, webbrowser, sqlite3, hashlib, secrets
 from datetime import date, timedelta, datetime
 
-PORT    = int(os.environ.get('PORT', 7291))
-DIR     = os.path.dirname(os.path.abspath(__file__))
-DB_FILE = os.environ.get('DB_PATH', os.path.join(DIR, 'devotional.db'))
+PORT        = int(os.environ.get('PORT', 7291))
+DIR         = os.path.dirname(os.path.abspath(__file__))
+DB_FILE     = os.environ.get('DB_PATH', os.path.join(DIR, 'devotional.db'))
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
 
-# ── Database ──────────────────────────────────────────────────────────────
+# ── DB adapter ────────────────────────────────────────────────────────────
+
+class _Cur:
+    """Normalizes SQLite cursor and psycopg2 cursor."""
+    def __init__(self, cur): self._c = cur
+    def fetchone(self):
+        r = self._c.fetchone()
+        return dict(r) if r else None
+    def fetchall(self):
+        return [dict(r) for r in (self._c.fetchall() or [])]
+
+class Conn:
+    def __init__(self, raw, pg=False):
+        self._raw = raw
+        self._pg  = pg
+
+    def execute(self, sql, params=()):
+        if self._pg:
+            cur = self._raw.cursor()
+            cur.execute(sql, params)
+            return _Cur(cur)
+        else:
+            return _Cur(self._raw.execute(sql.replace('%s', '?'), params))
+
+    def executescript(self, sql):
+        if self._pg:
+            cur = self._raw.cursor()
+            for stmt in [s.strip() for s in sql.split(';') if s.strip()]:
+                cur.execute(stmt)
+        else:
+            self._raw.executescript(sql)
 
 @contextmanager
 def db():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    try:
-        yield conn
-        conn.commit()
-    finally:
-        conn.close()
+    if DATABASE_URL:
+        import psycopg2, psycopg2.extras
+        raw = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+        try:
+            yield Conn(raw, pg=True)
+            raw.commit()
+        except Exception:
+            raw.rollback()
+            raise
+        finally:
+            raw.close()
+    else:
+        raw = sqlite3.connect(DB_FILE)
+        raw.row_factory = sqlite3.Row
+        raw.execute("PRAGMA journal_mode=WAL")
+        try:
+            yield Conn(raw, pg=False)
+            raw.commit()
+        finally:
+            raw.close()
+
+# ── Schema ────────────────────────────────────────────────────────────────
+
+PG_SCHEMA = '''
+    CREATE TABLE IF NOT EXISTS passages (
+        date     TEXT PRIMARY KEY,
+        ref      TEXT NOT NULL,
+        title    TEXT,
+        saved_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS users (
+        id            SERIAL PRIMARY KEY,
+        username      TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at    TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+        token      TEXT PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS reads (
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        date       TEXT NOT NULL,
+        is_read    INTEGER NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT NOW(),
+        PRIMARY KEY (user_id, date)
+    )
+'''
+
+SQLITE_SCHEMA = '''
+    CREATE TABLE IF NOT EXISTS passages (
+        date     TEXT PRIMARY KEY,
+        ref      TEXT NOT NULL,
+        title    TEXT,
+        saved_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS users (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        username      TEXT UNIQUE NOT NULL COLLATE NOCASE,
+        password_hash TEXT NOT NULL,
+        created_at    TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+        token      TEXT PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS reads (
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        date       TEXT NOT NULL,
+        is_read    INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (user_id, date)
+    )
+'''
 
 def init_db():
     with db() as conn:
-        conn.executescript('''
-            CREATE TABLE IF NOT EXISTS passages (
-                date     TEXT PRIMARY KEY,
-                ref      TEXT NOT NULL,
-                title    TEXT,
-                saved_at TEXT DEFAULT (datetime('now'))
-            );
-            CREATE TABLE IF NOT EXISTS users (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                username      TEXT UNIQUE NOT NULL COLLATE NOCASE,
-                password_hash TEXT NOT NULL,
-                created_at    TEXT DEFAULT (datetime('now'))
-            );
-            CREATE TABLE IF NOT EXISTS sessions (
-                token      TEXT PRIMARY KEY,
-                user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                created_at TEXT DEFAULT (datetime('now'))
-            );
-        ''')
-        # reads table may already exist without user_id — migrate if needed
-        cols = [r['name'] for r in conn.execute("PRAGMA table_info(reads)").fetchall()]
-        if not cols:
-            conn.execute('''
-                CREATE TABLE reads (
-                    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                    date       TEXT NOT NULL,
-                    is_read    INTEGER NOT NULL DEFAULT 0,
-                    updated_at TEXT DEFAULT (datetime('now')),
-                    PRIMARY KEY (user_id, date)
+        conn.executescript(PG_SCHEMA if DATABASE_URL else SQLITE_SCHEMA)
+        if not DATABASE_URL:
+            # SQLite migration: add user_id to old reads table if needed
+            cols = [r['name'] for r in conn.execute("PRAGMA table_info(reads)").fetchall()]
+            if cols and 'user_id' not in cols:
+                conn.executescript(
+                    'ALTER TABLE reads RENAME TO reads_v1;'
+                    + SQLITE_SCHEMA.split('CREATE TABLE IF NOT EXISTS reads')[1].split(')')[0]
+                    + 'CREATE TABLE reads ('
+                    + SQLITE_SCHEMA.split('CREATE TABLE IF NOT EXISTS reads')[1]
                 )
-            ''')
-        elif 'user_id' not in cols:
-            # Old single-user schema — rename and recreate
-            conn.execute('ALTER TABLE reads RENAME TO reads_v1')
-            conn.execute('''
-                CREATE TABLE reads (
-                    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                    date       TEXT NOT NULL,
-                    is_read    INTEGER NOT NULL DEFAULT 0,
-                    updated_at TEXT DEFAULT (datetime('now')),
-                    PRIMARY KEY (user_id, date)
-                )
-            ''')
 
 # ── Auth helpers ──────────────────────────────────────────────────────────
 
@@ -88,69 +155,67 @@ def verify_pw(password, stored):
 def create_session(user_id):
     token = secrets.token_hex(32)
     with db() as conn:
-        conn.execute('INSERT INTO sessions (token, user_id) VALUES (?,?)', (token, user_id))
+        conn.execute('INSERT INTO sessions (token, user_id) VALUES (%s, %s)', (token, user_id))
     return token
 
 def user_from_token(token):
     if not token:
         return None
     with db() as conn:
-        row = conn.execute(
-            'SELECT u.id, u.username FROM sessions s JOIN users u ON s.user_id=u.id WHERE s.token=?',
+        return conn.execute(
+            'SELECT u.id, u.username FROM sessions s JOIN users u ON s.user_id=u.id WHERE s.token=%s',
             (token,)
         ).fetchone()
-    return dict(row) if row else None
 
 # ── Business logic ────────────────────────────────────────────────────────
 
 def db_save_passage(date_str, ref, title):
     with db() as conn:
         conn.execute(
-            'INSERT OR IGNORE INTO passages (date, ref, title) VALUES (?,?,?)',
+            'INSERT INTO passages (date, ref, title) VALUES (%s, %s, %s) ON CONFLICT (date) DO NOTHING',
             (date_str, ref, title or '')
         )
 
 def db_set_read(user_id, date_str, is_read):
+    now = datetime.now().isoformat()
     with db() as conn:
         conn.execute('''
             INSERT INTO reads (user_id, date, is_read, updated_at)
-            VALUES (?,?,?,datetime('now'))
-            ON CONFLICT(user_id, date) DO UPDATE SET
-                is_read=excluded.is_read, updated_at=excluded.updated_at
-        ''', (user_id, date_str, 1 if is_read else 0))
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (user_id, date) DO UPDATE SET
+                is_read = EXCLUDED.is_read, updated_at = EXCLUDED.updated_at
+        ''', (user_id, date_str, 1 if is_read else 0, now))
 
 def db_get_history(user_id):
     with db() as conn:
-        rows = conn.execute('''
+        return conn.execute('''
             SELECT p.date, p.ref, p.title,
                    COALESCE(r.is_read, 0) AS is_read
             FROM passages p
-            LEFT JOIN reads r ON p.date=r.date AND r.user_id=?
+            LEFT JOIN reads r ON p.date=r.date AND r.user_id=%s
             ORDER BY p.date DESC
         ''', (user_id,)).fetchall()
-    return [dict(r) for r in rows]
 
 def db_get_reads(user_id, month=None):
     with db() as conn:
         if month:
             rows = conn.execute(
-                "SELECT date, is_read FROM reads WHERE user_id=? AND date LIKE ?",
+                "SELECT date, is_read FROM reads WHERE user_id=%s AND date LIKE %s",
                 (user_id, f'{month}%')
             ).fetchall()
         else:
             rows = conn.execute(
-                'SELECT date, is_read FROM reads WHERE user_id=?', (user_id,)
+                'SELECT date, is_read FROM reads WHERE user_id=%s', (user_id,)
             ).fetchall()
     return {r['date']: r['is_read'] for r in rows}
 
 def calc_streak(user_id):
     with db() as conn:
         rows = conn.execute(
-            "SELECT date FROM reads WHERE user_id=? AND is_read=1", (user_id,)
+            "SELECT date FROM reads WHERE user_id=%s AND is_read=1", (user_id,)
         ).fetchall()
     read_set = {r['date'] for r in rows}
-    streak = 0
-    d = date.today()
+    streak, d = 0, date.today()
     while d.isoformat() in read_set:
         streak += 1
         d -= timedelta(days=1)
@@ -165,7 +230,7 @@ def get_leaderboard():
         streak = calc_streak(u['id'])
         with db() as conn:
             mr = conn.execute(
-                "SELECT COUNT(*) c FROM reads WHERE user_id=? AND date LIKE ? AND is_read=1",
+                "SELECT COUNT(*) AS c FROM reads WHERE user_id=%s AND date LIKE %s AND is_read=1",
                 (u['id'], f'{month_prefix}%')
             ).fetchone()['c']
         result.append({'username': u['username'], 'streak': streak, 'month_reads': mr})
@@ -175,8 +240,8 @@ def get_leaderboard():
 # ── Scraping ──────────────────────────────────────────────────────────────
 
 HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.9',
 }
 BOOK_RE = re.compile(r'\b((?:[1-3]\s)?[A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\s+(\d+:\d+(?:-\d+)?)\b')
@@ -193,8 +258,7 @@ BG_VERSIONS = {'rv60':'RVR1960','nbla':'NBLA','nvi':'NVI','rva':'RVA-2015','dhh'
 
 def fetch_url(url, method='GET', body=None, extra_headers=None):
     h = dict(HEADERS)
-    if extra_headers:
-        h.update(extra_headers)
+    if extra_headers: h.update(extra_headers)
     req = urllib.request.Request(url, data=body, headers=h, method=method)
     with urllib.request.urlopen(req, timeout=12) as r:
         return r.read().decode('utf-8', errors='replace')
@@ -283,21 +347,18 @@ class Handler(BaseHTTPRequestHandler):
             user = self._require_auth()
             if not user: return
             d = data.get('date') or date.today().isoformat()
-            is_read = bool(data.get('is_read', True))
-            db_set_read(user['id'], d, is_read)
-            self._json({'ok': True, 'date': d, 'is_read': is_read})
+            db_set_read(user['id'], d, bool(data.get('is_read', True)))
+            self._json({'ok': True, 'date': d, 'is_read': bool(data.get('is_read', True))})
         elif p.path == '/api/save-passage':
             if not self._require_auth(): return
-            ref = data.get('ref','')
+            ref = data.get('ref', '')
             if ref: db_save_passage(data.get('date', date.today().isoformat()), ref, data.get('title',''))
             self._json({'ok': True})
         else:
             self._respond(404, 'text/plain', b'Not found')
 
-    # ── Auth endpoints ────────────────────────────────────────────────────
-
     def _register(self, data):
-        username = (data.get('username') or '').strip()
+        username = (data.get('username') or '').strip().lower()
         password = data.get('password') or ''
         if not username or not password:
             self._json({'error': 'Usuario y contraseña requeridos'}, 400); return
@@ -307,19 +368,21 @@ class Handler(BaseHTTPRequestHandler):
             self._json({'error': 'La contraseña debe tener al menos 4 caracteres'}, 400); return
         try:
             with db() as conn:
-                conn.execute('INSERT INTO users (username, password_hash) VALUES (?,?)',
+                conn.execute('INSERT INTO users (username, password_hash) VALUES (%s, %s)',
                              (username, hash_pw(password)))
-                user_id = conn.execute('SELECT id FROM users WHERE username=?', (username,)).fetchone()['id']
-        except sqlite3.IntegrityError:
-            self._json({'error': 'Ese nombre de usuario ya existe'}, 409); return
+                user_id = conn.execute('SELECT id FROM users WHERE username=%s', (username,)).fetchone()['id']
+        except Exception as e:
+            if 'unique' in str(e).lower() or 'UNIQUE' in str(e):
+                self._json({'error': 'Ese nombre de usuario ya existe'}, 409); return
+            raise
         token = create_session(user_id)
         self._json({'token': token, 'username': username})
 
     def _login(self, data):
-        username = (data.get('username') or '').strip()
+        username = (data.get('username') or '').strip().lower()
         password = data.get('password') or ''
         with db() as conn:
-            row = conn.execute('SELECT id, password_hash FROM users WHERE username=?', (username,)).fetchone()
+            row = conn.execute('SELECT id, password_hash FROM users WHERE username=%s', (username,)).fetchone()
         if not row or not verify_pw(password, row['password_hash']):
             self._json({'error': 'Usuario o contraseña incorrectos'}, 401); return
         token = create_session(row['id'])
@@ -329,14 +392,12 @@ class Handler(BaseHTTPRequestHandler):
         token = self._token()
         if token:
             with db() as conn:
-                conn.execute('DELETE FROM sessions WHERE token=?', (token,))
+                conn.execute('DELETE FROM sessions WHERE token=%s', (token,))
         self._json({'ok': True})
-
-    # ── Passage / Bible endpoints ─────────────────────────────────────────
 
     def _passage(self, date_str):
         with db() as conn:
-            row = conn.execute('SELECT ref, title FROM passages WHERE date=?', (date_str,)).fetchone()
+            row = conn.execute('SELECT ref, title FROM passages WHERE date=%s', (date_str,)).fetchone()
         if row:
             self._json({'reference': row['ref'], 'title': row['title'], 'cached': True}); return
         url  = 'https://www.duranno.com/livinglife/qt/reload_default1.asp'
@@ -364,8 +425,6 @@ class Handler(BaseHTTPRequestHandler):
         if not verses:
             self._json({'error': f'No se encontraron versículos para {ref} ({bg_ver})'}, 404); return
         self._json({'verses': verses, 'version': bg_ver})
-
-    # ── Helpers ───────────────────────────────────────────────────────────
 
     def _token(self):
         auth = self.headers.get('Authorization', '')
@@ -416,7 +475,7 @@ if __name__ == '__main__':
     host   = '0.0.0.0' if os.environ.get('PORT') else 'localhost'
     server = HTTPServer((host, PORT), Handler)
     print(f'✓ Devocional → http://localhost:{PORT}')
-    print(f'  DB: {DB_FILE}')
+    print(f'  DB: {"PostgreSQL (Supabase)" if DATABASE_URL else DB_FILE}')
     print('  Ctrl+C para detener.')
     threading.Thread(target=open_browser, daemon=True).start()
     try:
